@@ -1,0 +1,125 @@
+library(car)
+library(e1071)
+library(stringr)
+library(lattice)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+library(randomForest)
+
+setwd("D:/Kaggle/BikeSharingDemand")
+train_ini<-read.csv("train.csv", header=T, stringsAsFactors=F)
+test_ini<-read.csv("test.csv", header=T, stringsAsFactors=F)
+train_ini$year<-str_sub(train_ini$datetime, 1,4)
+train_ini$date<-str_sub(train_ini$datetime, 6,7)
+train_ini$hour<-str_sub(train_ini$datetime, 11,13)
+train_ini$index<-1:10886
+
+test_ini$year<-str_sub(test_ini$datetime, 1,4)
+test_ini$date<-str_sub(test_ini$datetime, 6,7)
+test_ini$hour<-str_sub(test_ini$datetime, 11,13)
+
+set.seed(1)
+i<-sample(train_ini$index, round(length(train_ini$index)/3*2))
+
+test_ini<-train_ini[-i,]
+train_ini<-train_ini[i,]
+
+
+# split into 3 groups
+#par(mfrow=c(3,1))
+#plot(train_ini$hour[train_ini$workingday==1], train_ini$count[train_ini$workingday==1])
+##plot(train_ini$hour[train_ini$workingday==0 & train_ini$holiday==0], train_ini$count[train_ini$workingday==0 & train_ini$holiday==0])
+#plot(train_ini$hour[train_ini$workingday==0 & train_ini$holiday==1], train_ini$count[train_ini$workingday==0 & train_ini$holiday==1])
+
+#par(mfrow=c(4,1))
+#plot(train_ini$hour[train_ini$workingday==1&train_ini$weather==1], train_ini$count[train_ini$workingday==1&train_ini$weather==1])
+##plot(train_ini$hour[train_ini$workingday==1&train_ini$weather==2], train_ini$count[train_ini$workingday==1&train_ini$weather==2])
+plot(train_ini$hour[train_ini$workingday==1&train_ini$weather==3], train_ini$count[train_ini$workingday==1&train_ini$weather==3])
+
+##Detect outliers
+#plot(train_ini$hour[train_ini$workingday==1&train_ini$weather==4], train_ini$count[train_ini$workingday==1&train_ini$weather==4])
+#hist(train_ini$windspeed, breaks=seq(0,60, by=2))
+#plot(train_ini$temp, train_ini$atemp)
+#humi<-train_ini[train_ini$humidity==0,]
+##
+
+##Length(train_ini[,1]) = 10886 (Training data size)
+train_NoOutlier<-train_ini
+length(train_NoOutlier[,1])
+
+##Remove outliers
+#windspeed = 0 at weather = 3, 74 data. Include to model due to similar pattern with test data
+wind.train<-train_ini[train_ini$windspeed==0,]
+wind.test<-test_ini[test_ini$windspeed==0,]
+prop.table(table(wind.train$weather))
+prop.table(table(wind.test$weather))
+#temp != atemp at 2012-08-17, 24 data. Do not include to model 
+train_NoOutlier<-(train_NoOutlier[(train_NoOutlier$temp<20 | (train_NoOutlier$temp>=20 & train_NoOutlier$atemp>15)),])
+#workingday by weather = 4 at 2012-01-09. Do not include to model, but need to manually set count in the test data
+train_NoOutlier<-(train_NoOutlier[train_NoOutlier$weather!=4,])
+#humidity = 0 at 2011-03-10, 22 data. Do not include to model
+train_NoOutlier<-train_NoOutlier[train_NoOutlier$humidity!=0,]
+# sample size = 10839
+length(train_NoOutlier[,1])
+
+
+xyplot(train_NoOutlier$count~train_NoOutlier$index|train_NoOutlier$hour, groups=train_NoOutlier$season)
+
+
+
+#working
+working<-train_NoOutlier[train_NoOutlier$workingday==1,]
+#model_working<-svm(count~season+weather+atemp+humidity+windspeed+hour+year+date, data=working, kernel = "radial", gamma=0.5, cost=4)
+model_working<-randomForest(count~season+weather+temp+year+hour+date, data=working, importance = T, ntree=2000)
+#model_working<-loess(count~season+weather+atemp+hour, data=working)
+test_working<-test_ini
+test_working$year<-str_sub(test_working$datetime, 1,4)
+test_working$hour<-str_sub(test_working$datetime, 11,13)
+test_working<-test_working[test_working$workingday==1,]
+test_working$count<-round(predict(model_working, test_working))
+test_working$count[test_working$count<0]<-0
+
+#write.csv(working, file="working.csv")
+
+#weekend
+weekend<-train_NoOutlier[train_NoOutlier$workingday==0 & train_NoOutlier$holiday==0,]
+#model_weekend<-svm(count~season+weather+atemp+humidity+windspeed+hour, data=weekend, kernel = "radial", gamma=0.5, cost=4)
+model_weekend<-randomForest(count~season+weather+temp+hour+year+date, data=weekend, importance = T, ntree=2000)
+test_weekend<-test_ini
+test_weekend$year<-str_sub(test_weekend$datetime, 1,4)
+test_weekend$hour<-str_sub(test_weekend$datetime, 11,13)
+test_weekend<-test_weekend[test_weekend$workingday==0 & test_weekend$holiday==0,]
+test_weekend$count<-round(predict(model_weekend, test_weekend))
+#write.csv(pred_weekend, file="pred_weekend.csv")
+
+#holiday
+holi<-train_NoOutlier[train_NoOutlier$workingday==0 & train_NoOutlier$holiday==1,]
+#model_holi<-svm(count~season+weather+atemp+humidity+windspeed+hour, data=holi, kernel = "radial", gamma=0.5, cost=4)
+model_holi<-randomForest(count~season+weather+temp+hour+year+date, data=holi, importance = T, ntree=2000)
+test_holi<-test_ini
+test_holi$year<-str_sub(test_holi$datetime, 1,4)
+test_holi$hour<-str_sub(test_holi$datetime, 11,13)
+test_holi<-test_holi[test_holi$workingday==0 & test_holi$holiday==1,]
+test_holi$count<-round(predict(model_holi, test_holi))
+#write.csv(pred_holi, file="pred_holi.csv")
+
+test.list<-vector("list", 3)
+test.list[[1]]<-test_working
+test.list[[2]]<-test_weekend
+test.list[[3]]<-test_holi
+test.final<-Reduce(rbind, test.list[1:3])
+
+final<-merge(test_ini, test.final, by.x="index", by.y="index")
+rmsle<-(sum(( log(final$count.y+1) - log(final$count.x+1) )^2) / length(final[,1]))^0.5
+rmsle
+
+#write.csv(final, file="final.csv")
+plot(final$hour.x, final$count.y-final$count.x)
+abline(h=0, col=2, lwd=3)
+xyplot(final$count.y-final$count.x~as.factor(final$hour.x)|as.factor(final$workingday.x))
+
+
+#varImpPlot(model_working)
+#rm(list=ls())
