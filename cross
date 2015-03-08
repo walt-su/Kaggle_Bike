@@ -1,31 +1,3 @@
-library(car)
-library(e1071)
-library(stringr)
-library(lattice)
-library(rpart)
-library(rattle)
-library(rpart.plot)
-library(RColorBrewer)
-library(randomForest)
-
-setwd("D:/Kaggle/BikeSharingDemand")
-train_ini<-read.csv("train.csv", header=T, stringsAsFactors=F)
-test_ini<-read.csv("test.csv", header=T, stringsAsFactors=F)
-train_ini$year<-str_sub(train_ini$datetime, 1,4)
-train_ini$date<-str_sub(train_ini$datetime, 6,7)
-train_ini$hour<-str_sub(train_ini$datetime, 11,13)
-train_ini$index<-1:10886
-
-test_ini$year<-str_sub(test_ini$datetime, 1,4)
-test_ini$date<-str_sub(test_ini$datetime, 6,7)
-test_ini$hour<-str_sub(test_ini$datetime, 11,13)
-
-set.seed(1)
-i<-sample(train_ini$index, round(length(train_ini$index)/3*2))
-
-test_ini<-train_ini[-i,]
-train_ini<-train_ini[i,]
-
 
 # split into 3 groups
 #par(mfrow=c(3,1))
